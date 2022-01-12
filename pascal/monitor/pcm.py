@@ -27,20 +27,21 @@ class PcmMonitorBase(BufferedMonitor):
         outputs = []
 
         async def callback(data: dict) -> None:
-            print(data)
             if not data["text"]:
                 return
-            
-            digit_pct = float(sum(c.isdigit() for c in data["text"])) / len(data["text"])
+
+            digit_pct = float(sum(c.isdigit() for c in data["text"])) / len(
+                data["text"]
+            )
             data["digit_pct"] = digit_pct
 
             if not self.batch:
                 await self.buf_push_batch([data])
                 return
-            
+
             outputs.append(data)
-            
-            if digit_pct < 0.5 and ',' in data["text"] and outputs:
+
+            if digit_pct < 0.5 and "," in data["text"] and outputs:
                 await self.buf_push_batch(outputs)
                 outputs.clear()
 
@@ -62,10 +63,8 @@ class PcmMonitorBase(BufferedMonitor):
             if row_data["digit_pct"] > 0.5:
                 header = ["timestamp", "no."] + self.header
                 if not timelines:
-                    timelines = {k:[] for k in header}
-                for k, v in zip(
-                        header,
-                        [row_data["timestamp"], self.counter] + row):
+                    timelines = {k: [] for k in header}
+                for k, v in zip(header, [row_data["timestamp"], self.counter] + row):
                     timelines[k].append(v)
 
                 if not self.batch:

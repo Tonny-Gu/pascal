@@ -3,6 +3,7 @@ from asyncio.streams import StreamReader
 from datetime import datetime
 import asyncio
 import logging
+import os
 from typing import List, Callable
 from pascal.parser import ParsedResult, Parser
 
@@ -22,7 +23,7 @@ class ShellLauncher(LauncherLike):
         cmd: str,
         stdout_cb: Callable = None,
         stderr_cb: Callable = None,
-        timeout: int = None,
+        timeout: float = None,
     ):
         self.cmd = cmd
         self.stdout_cb = stdout_cb
@@ -31,22 +32,16 @@ class ShellLauncher(LauncherLike):
 
     async def get(self) -> dict:
         proc = await asyncio.create_subprocess_shell(
-            self.cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            "exec " + self.cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
 
-        async def read_stream(s: StreamReader, callback: Callable) -> List[dict]:
-            outputs = []
+        async def read_stream(
+            s: StreamReader, callback: Callable, outputs: list
+        ) -> List[dict]:
             while True:
-                if self.timeout:
-                    try:
-                        data = await asyncio.wait_for(
-                            s.readline(), timeout=self.timeout
-                        )
-                    except asyncio.TimeoutError:
-                        logging.warn("Command %s: timeout." % self.cmd)
-                        raise
-                else:
-                    data = await s.readline()
+                data = await s.readline()
                 if not data:
                     break
                 output = {
@@ -56,12 +51,22 @@ class ShellLauncher(LauncherLike):
                 if isinstance(callback, Callable):
                     await callback(output)
                 outputs.append(output)
-            return outputs
 
-        stdout, stderr = await asyncio.gather(
-            read_stream(proc.stdout, self.stdout_cb),
-            read_stream(proc.stderr, self.stderr_cb),
-        )
+        stdout, stderr = [], []
+        tasks = [
+            asyncio.create_task(read_stream(proc.stdout, self.stdout_cb, stdout)),
+            asyncio.create_task(read_stream(proc.stderr, self.stderr_cb, stderr)),
+        ]
+
+        try:
+            await asyncio.wait_for(asyncio.gather(*tasks), timeout=self.timeout)
+        except asyncio.TimeoutError:
+            logging.info("Process [%s] timeout. Trying to clean up." % self.cmd[:20])
+            try:
+                proc.terminate()
+                await proc.communicate()
+            except Exception as e:
+                logging.warning("Failed to terminate the process. Reason: " + str(e))
 
         return {
             "stdout": stdout,

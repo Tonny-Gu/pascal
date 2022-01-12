@@ -38,10 +38,10 @@ class MultiProcessSchema(Schema):
         self.results = []
         self.job_id = 0
         self.monitors: List[MonitorLike] = [
-            # PcmMonitor(),
+            PcmMonitor(),
             PcmPcieMonitor(),
-            #  PcmNumaMonitor(),
-            # PcmCoreMonitor(),
+            PcmNumaMonitor(),
+            PcmCoreMonitor(),
         ]
 
     async def run(self) -> dict:
@@ -60,8 +60,14 @@ class MultiProcessSchema(Schema):
             async def fun(output: dict):
                 msg: str = output["text"]
                 logging.info(
-                    "(Job %d, Proc %d, %s) %s: '%s'."
-                    % (job_id, proc_id, pipe_name, cmds[proc_id][:20], msg.strip()[:100])
+                    "(Job %d, Proc %d, %s) [%s] said '%s'."
+                    % (
+                        job_id,
+                        proc_id,
+                        pipe_name,
+                        cmds[proc_id][:20],
+                        msg.strip()[:100],
+                    )
                 )
 
             return fun

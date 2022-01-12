@@ -43,15 +43,6 @@ def _init():
     logging.info("Pascal started.")
 
 
-def _finalize():
-    exp_item = "%s_%s" % (_ctx["exp_item"], datetime.now().strftime("%Y-%m-%d-%H-%M"))
-
-    with open("%s/%s.json" % (_ctx["exp_full_name"], exp_item), "w") as f:
-        f.write(json.dumps(_ctx["result"]))
-    
-    logging.info("%s finished." % _ctx["exp_item"])
-
-
 def apply_schema(schema: Schema):
     def decorate(func: Callable):
         assert func.__globals__["__name__"] == "__main__"
@@ -68,12 +59,11 @@ def apply_schema(schema: Schema):
                 cmd_params = {
                     k: v for k, v in func._params.items() if k not in func_params
                 }
-
+                _ctx["subexp_time"] = datetime.now().strftime("%Y-%m-%d-%H-%M")
                 task = asyncio.create_task(schema.run())
                 for param_set in _param_gen(func_params):
                     logging.info(
-                        "%s started to run with params %s"
-                        % (func.__name__, param_set)
+                        "%s started to run with params %s" % (func.__name__, param_set)
                     )
                     _ctx.update(
                         {
@@ -90,10 +80,9 @@ def apply_schema(schema: Schema):
                     await task
                 except asyncio.CancelledError:
                     logging.debug("Pascal recevied stopped signal.")
-                ret = {"exp_item": func.__name__, "result": schema.get()}
-                _ctx.update(ret)
-                _finalize()
-                return ret
+
+                logging.info("%s finished." % func.__name__)
+                return schema.get()
 
             return asyncio.run(main())
 
@@ -117,7 +106,7 @@ _formatter = string.Formatter()
 
 
 async def shell(
-    cmds: List[str], *other_cmds: List[str], timeout: int = None, params={}
+    cmds: List[str], *other_cmds: List[str], timeout: float = None, params={}
 ):
     assert _ctx
     schema: Schema = _ctx["schema"]
@@ -138,6 +127,13 @@ async def shell(
             logging.info("%s launched." % new_cmds)
             ret = await schema.shell(new_cmds, timeout)
             ret_values.append(ret)
+
+            with open(
+                "%s/%s_%s.json"
+                % (_ctx["exp_full_name"], _ctx["func_name"], _ctx["subexp_time"],),
+                "w",
+            ) as f:
+                f.write(json.dumps(schema.get()))
     return ret_values
 
 
