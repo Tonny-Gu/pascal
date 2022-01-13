@@ -126,6 +126,7 @@ async def shell(
             new_cmds = [cmd.format(**param_set) for cmd in cmd_group]
             logging.info("%s launched." % new_cmds)
             ret = await schema.shell(new_cmds, timeout)
+            ret["param_set"] = param_set
             ret_values.append(ret)
 
             with open(
